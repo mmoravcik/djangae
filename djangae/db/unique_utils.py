@@ -26,6 +26,8 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=False, ignore_null_v
         Given an instance, this function returns a list of identifiers that represent
         unique field/value combinations.
     """
+    from djangae.db.utils import get_top_concrete_parent
+
     unique_combinations = _unique_combinations(model, ignore_pk)
 
     meta = model._meta
@@ -64,7 +66,7 @@ def unique_identifiers_from_entity(model, entity, ignore_pk=False, ignore_null_v
 
         if include_combination:
             for ident in combo_identifiers:
-                identifiers.append(model._meta.db_table + "|" + "|".join(ident))
+                identifiers.append(get_top_concrete_parent(model)._meta.db_table + "|" + "|".join(ident))
 
     return identifiers
 

@@ -162,7 +162,8 @@ def remove_entities_from_cache_by_key(keys, memcache_only=False):
 
     if not memcache_only:
         for key in keys:
-            for identifier in _context.stack.top.reverse_cache.get(_apply_namespace(key), []):
+            identifiers = _context.stack.top.reverse_cache.get(key, [])
+            for identifier in identifiers:
                 if identifier in _context.stack.top.cache:
                     del _context.stack.top.cache[identifier]
 
@@ -182,7 +183,7 @@ def get_from_cache_by_key(key):
     ret = None
     if _context.context_enabled:
         # It's safe to hit the context cache, because a new one was pushed on the stack at the start of the transaction
-        ret = _context.stack.top.get_entity_by_key(_apply_namespace(key))
+        ret = _context.stack.top.get_entity_by_key(key)
         if ret is None and not datastore.IsInTransaction():
             if _context.memcache_enabled:
                 ret = _get_entity_from_memcache_by_key(key)

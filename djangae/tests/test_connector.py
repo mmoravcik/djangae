@@ -706,7 +706,9 @@ class ConstraintTests(TestCase):
 
         from djangae.db.backends.appengine.commands import FlushCommand
 
-        FlushCommand(ModelWithUniques._meta.db_table).execute()
+        with active_namespace(DEFAULT_NAMESPACE):
+            FlushCommand(ModelWithUniques._meta.db_table).execute()
+
         ModelWithUniques.objects.create(name="One")
 
         with self.assertRaises(IntegrityError):
@@ -832,12 +834,13 @@ class ConstraintTests(TestCase):
         self.assertEqual(0, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
 
     def test_delete_clears_markers(self):
-        initial_count = datastore.Query(UniqueMarker.kind()).Count()
+        with active_namespace(DEFAULT_NAMESPACE):
+            initial_count = datastore.Query(UniqueMarker.kind()).Count()
 
-        instance = ModelWithUniques.objects.create(name="One")
-        self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
-        instance.delete()
-        self.assertEqual(0, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+            instance = ModelWithUniques.objects.create(name="One")
+            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+            instance.delete()
+            self.assertEqual(0, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
 
     @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
     def test_constraints_disabled_doesnt_create_or_check_markers(self):

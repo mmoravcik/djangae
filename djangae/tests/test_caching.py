@@ -1,9 +1,8 @@
-import unittest
-
 from google.appengine.api import datastore
 from google.appengine.api import datastore_errors
 from google.appengine.ext.db import non_transactional
 
+from django.conf import settings
 from django.db import models
 from django.http import HttpRequest
 from django.core.signals import request_finished, request_started
@@ -15,7 +14,11 @@ from djangae.db import unique_utils
 from djangae.db import transaction
 from djangae.db.backends.appengine.context import ContextStack
 from djangae.db.backends.appengine import caching
-from djangae.db.caching import disable_cache, clear_context_cache, _apply_namespace
+from djangae.db.caching import disable_cache, clear_context_cache
+from djangae.db.backends.appengine.compiler import active_namespace
+
+
+DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE", "")
 
 
 class FakeEntity(dict):
@@ -120,105 +123,115 @@ class MemcacheCachingTests(TestCase):
 
     @disable_cache(memcache=False, context=True)
     def test_save_inside_transaction_evicts_cache(self):
-        entity_data = {
-            "field1": "Apple",
-            "comb1": 1,
-            "comb2": "Cherry"
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "Apple",
+                "comb1": 1,
+                "comb2": "Cherry"
+            }
 
-        identifiers = unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            )
 
-        instance = CachingTestModel.objects.create(id=222, **entity_data)
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
-
-        with transaction.atomic():
-            instance.field1 = "Banana"
-            instance.save()
-
-        # Make sure that altering inside the transaction evicted the item from the cache
-        # and that a get then hits the datastore (which then in turn caches)
-        with sleuth.watch("google.appengine.api.datastore.Get") as datastore_get:
+            instance = CachingTestModel.objects.create(id=222, **entity_data)
             for identifier in identifiers:
-                self.assertIsNone(cache.get(identifier))
+                self.assertEqual(entity_data, cache.get(identifier))
 
-            self.assertEqual("Banana", CachingTestModel.objects.get(pk=instance.pk).field1)
-            self.assertTrue(datastore_get.called)
+            with transaction.atomic():
+                instance.field1 = "Banana"
+                instance.save()
+
+            # Make sure that altering inside the transaction evicted the item from the cache
+            # and that a get then hits the datastore (which then in turn caches)
+            with sleuth.watch("google.appengine.api.datastore.Get") as datastore_get:
+                for identifier in identifiers:
+                    self.assertIsNone(cache.get(identifier))
+
+                self.assertEqual("Banana", CachingTestModel.objects.get(pk=instance.pk).field1)
+                self.assertTrue(datastore_get.called)
 
 
     @disable_cache(memcache=False, context=True)
     def test_save_caches_outside_transaction_only(self):
-        entity_data = {
-            "field1": "Apple",
-            "comb1": 1,
-            "comb2": "Cherry"
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "Apple",
+                "comb1": 1,
+                "comb2": "Cherry"
+            }
 
-        identifiers = unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            )
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        instance = CachingTestModel.objects.create(id=222, **entity_data)
+            instance = CachingTestModel.objects.create(id=222, **entity_data)
 
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
+            for identifier in identifiers:
+                self.assertEqual(entity_data, cache.get(identifier))
 
-        instance.delete()
+            instance.delete()
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        with transaction.atomic():
-            instance = CachingTestModel.objects.create(**entity_data)
+            with transaction.atomic():
+                instance = CachingTestModel.objects.create(**entity_data)
 
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
     @disable_cache(memcache=False, context=True)
     def test_save_wipes_entity_from_cache_inside_transaction(self):
-        entity_data = {
-            "field1": "Apple",
-            "comb1": 1,
-            "comb2": "Cherry"
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "Apple",
+                "comb1": 1,
+                "comb2": "Cherry"
+            }
 
-        identifiers = unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            )
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        instance = CachingTestModel.objects.create(id=222, **entity_data)
+            instance = CachingTestModel.objects.create(id=222, **entity_data)
 
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
+            for identifier in identifiers:
+                self.assertEqual(entity_data, cache.get(identifier))
 
-        with transaction.atomic():
-            instance.save()
+            with transaction.atomic():
+                instance.save()
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
     @disable_cache(memcache=False, context=True)
     def test_transactional_save_wipes_the_cache_only_after_its_result_is_consistently_available(self):
-        entity_data = {
-            "field1": "old",
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "old",
+            }
 
-        identifiers = _apply_namespace(
-            unique_utils.unique_identifiers_from_entity(
-                CachingTestModel, FakeEntity(entity_data, id=222)
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(
+                    CachingTestModel, FakeEntity(entity_data, id=222)
+                )
             )
-        )
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        instance = CachingTestModel.objects.create(id=222, **entity_data)
+            instance = CachingTestModel.objects.create(id=222, **entity_data)
 
-        for identifier in identifiers:
-            self.assertEqual("old", cache.get(identifier)["field1"])
+            for identifier in identifiers:
+                self.assertEqual("old", cache.get(identifier)["field1"])
 
         @non_transactional
         def non_transactional_read(instance_pk):
@@ -234,59 +247,65 @@ class MemcacheCachingTests(TestCase):
 
     @disable_cache(memcache=False, context=True)
     def test_consistent_read_updates_memcache_outside_transaction(self):
-        entity_data = {
-            "field1": "Apple",
-            "comb1": 1,
-            "comb2": "Cherry"
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "Apple",
+                "comb1": 1,
+                "comb2": "Cherry"
+            }
 
-        identifiers = unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            )
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        CachingTestModel.objects.create(id=222, **entity_data)
+            CachingTestModel.objects.create(id=222, **entity_data)
 
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
+            for identifier in identifiers:
+                self.assertEqual(entity_data, cache.get(identifier))
 
-        cache.clear()
+            cache.clear()
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        CachingTestModel.objects.get(id=222) # Consistent read
+            CachingTestModel.objects.get(id=222) # Consistent read
 
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
+            for identifier in identifiers:
+                self.assertEqual(entity_data, cache.get(identifier))
 
     @disable_cache(memcache=False, context=True)
     def test_eventual_read_doesnt_update_memcache(self):
-        entity_data = {
-            "field1": "Apple",
-            "comb1": 1,
-            "comb2": "Cherry"
-        }
+        with active_namespace(DEFAULT_NAMESPACE):
+            entity_data = {
+                "field1": "Apple",
+                "comb1": 1,
+                "comb2": "Cherry"
+            }
 
-        identifiers = unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            identifiers = caching._apply_namespace(
+                unique_utils.unique_identifiers_from_entity(CachingTestModel, FakeEntity(entity_data, id=222))
+            )
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        CachingTestModel.objects.create(id=222, **entity_data)
+            CachingTestModel.objects.create(id=222, **entity_data)
 
-        for identifier in identifiers:
-            self.assertEqual(entity_data, cache.get(identifier))
+            for identifier in identifiers:
+                self.assertEqual(entity_data, cache.get(identifier))
 
-        cache.clear()
+            cache.clear()
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
-        CachingTestModel.objects.all()[0] # Inconsistent read
+            CachingTestModel.objects.all()[0] # Inconsistent read
 
-        for identifier in identifiers:
-            self.assertIsNone(cache.get(identifier))
+            for identifier in identifiers:
+                self.assertIsNone(cache.get(identifier))
 
     @disable_cache(memcache=False, context=True)
     def test_unique_filter_hits_memcache(self):
@@ -612,7 +631,6 @@ class ContextCachingTests(TestCase):
             A read inside a transaction shouldn't update the context cache outside that
             transaction
         """
-
         entity_data = {
             "field1": "Apple",
             "comb1": 1,

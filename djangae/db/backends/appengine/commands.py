@@ -767,11 +767,13 @@ class FlushCommand(object):
         while query.Count():
             datastore.Delete(query.Run())
 
+        namespace = namespace_manager.get_namespace()
+
         # Delete the markers we need to
         from djangae.db.constraints import UniqueMarker
         query = datastore.Query(UniqueMarker.kind(), keys_only=True)
-        query["__key__ >="] = datastore.Key.from_path(UniqueMarker.kind(), self.table)
-        query["__key__ <"] = datastore.Key.from_path(UniqueMarker.kind(), u"{}{}".format(self.table, u'\ufffd'))
+        query["__key__ >="] = datastore.Key.from_path(UniqueMarker.kind(), self.table, namespace=namespace)
+        query["__key__ <"] = datastore.Key.from_path(UniqueMarker.kind(), u"{}{}".format(self.table, u'\ufffd'), namespace=namespace)
         while query.Count():
             datastore.Delete(query.Run())
 
@@ -779,9 +781,9 @@ class FlushCommand(object):
         clear_context_cache()
 
 @db.non_transactional
-def reserve_id(kind, id_or_name):
+def reserve_id(kind, id_or_name, namespace):
     from google.appengine.api.datastore import _GetConnection
-    key = datastore.Key.from_path(kind, id_or_name)
+    key = datastore.Key.from_path(kind, id_or_name, namespace=namespace)
     _GetConnection()._async_reserve_keys(None, [key])
 
 
@@ -794,9 +796,10 @@ class InsertCommand(object):
         self.raw = raw
         self.fields = fields
 
-    def execute(self):
-        included_keys = []
-        entities = []
+        self.entities = []
+        self.included_keys = []
+
+        namespace = connection.ops.connection.settings_dict.get("NAMESPACE", "")
 
         for obj in self.objs:
             if self.has_pk:
@@ -806,20 +809,23 @@ class InsertCommand(object):
                     self.model._meta.pk.pre_save(obj, True),
                     self.connection
                 )
-                included_keys.append(
-                    get_datastore_key(self.model, value, namespace_manager.get_namespace())
+                self.included_keys.append(
+                    get_datastore_key(self.model, value, namespace)
                     if value else None
                 )
 
-                if not self.model._meta.pk.blank and included_keys[-1] is None:
+                if not self.model._meta.pk.blank and self.included_keys[-1] is None:
                     raise IntegrityError("You must specify a primary key value for {} instances".format(self.model))
             else:
                 # We zip() self.entities and self.included_keys in execute(), so they should be the same length
-                included_keys.append(None)
+                self.included_keys.append(None)
 
-            entities.append(
+            self.entities.append(
                 django_instance_to_entity(self.connection, self.model, self.fields, self.raw, obj)
             )
+
+    def execute(self):
+        namespace = namespace_manager.get_namespace()
 
         if self.has_pk and not has_concrete_parents(self.model):
             results = []
@@ -829,7 +835,7 @@ class InsertCommand(object):
 
             was_in_transaction = datastore.IsInTransaction()
 
-            for key, ent in zip(included_keys, entities):
+            for key, ent in zip(self.included_keys, self.entities):
                 @db.transactional
                 def txn():
                     if key is not None:
@@ -857,7 +863,7 @@ class InsertCommand(object):
 
                 # Make sure we notify app engine that we are using this ID
                 # FIXME: Copy ancestor across to the template key
-                reserve_id(key.kind(), key.id_or_name())
+                reserve_id(key.kind(), key.id_or_name(), namespace)
 
                 txn()
 
@@ -865,25 +871,25 @@ class InsertCommand(object):
         else:
             if not constraints.constraint_checks_enabled(self.model):
                 # Fast path, just bulk insert
-                results = datastore.Put(entities)
-                caching.add_entities_to_cache(self.model, entities, caching.CachingSituation.DATASTORE_PUT)
+                results = datastore.Put(self.entities)
+                caching.add_entities_to_cache(self.model, self.entities, caching.CachingSituation.DATASTORE_PUT)
                 return results
             else:
                 markers = []
                 try:
                     #FIXME: We should rearrange this so that each entity is handled individually like above. We'll
                     # lose insert performance, but gain consistency on errors which is more important
-                    markers = constraints.acquire_bulk(self.model, entities)
-                    results = datastore.Put(entities)
+                    markers = constraints.acquire_bulk(self.model, self.entities)
+                    results = datastore.Put(self.entities)
 
-                    caching.add_entities_to_cache(self.model, entities, caching.CachingSituation.DATASTORE_PUT)
+                    caching.add_entities_to_cache(self.model, self.entities, caching.CachingSituation.DATASTORE_PUT)
 
                 except:
                     to_delete = chain(*markers)
                     constraints.release_markers(to_delete)
                     raise
 
-                for ent, k, m in zip(entities, results, markers):
+                for ent, k, m in zip(self.entities, results, markers):
                     ent.__key = k
                     constraints.update_instance_on_markers(ent, m)
 
