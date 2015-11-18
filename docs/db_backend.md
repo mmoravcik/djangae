@@ -201,3 +201,28 @@ The following functions are available to manage transactions:
  - `djangae.db.transaction.atomic` - Decorator and Context Manager. Starts a new transaction, accepted `xg`, `indepedendent` and `mandatory` args
  - `djangae.db.transaction.non_atomic` - Decorator and Context Manager. Breaks out of any current transactions so you can run queries outside the transaction
  - `djangae.db.transaction.in_atomic_block` - Returns True if inside a transaction, False otherwise
+
+
+## Multiple Namespaces (Experimental)
+
+**Namespace support is new and experimental, please make sure your code is well tested and report any bugs**
+
+It's possible to create separate "databases" on the datastore via "namespaces". This is supported in Djangae through the normal Django
+multiple database support. To configure multiple datastore namespaces, you can add an optional "NAMESPACE" to the DATABASES setting:
+
+```
+DATABASES = {
+    'default': {
+        'ENGINE': 'djangae.db.backends.appengine'
+        'NAMESPACE': 'default'
+    },
+    'archive': {
+        'ENGINE': 'djangae.db.backends.appengine'
+        'NAMESPACE': 'archive'
+    }
+}
+```
+
+You can make use of Django's routers, the `using()` method, and the `save(using='...')` in the same way as normal multi-database support.
+
+Cross-namespace foreign keys aren't supported. Also namespaces effect caching keys and unique markers (which are also restricted to a namespace).
