@@ -1584,7 +1584,14 @@ class NamespaceTests(TestCase):
         self.assertEqual(0, TestFruit.objects.using("ns1").filter(name="Orange", color="Orange").count())
 
     def test_no_database_namespace_defaults_to_empty(self):
-        pass
+        """
+            Test that creating an object without a namespace makes one that is
+            retrievable with just a kind and ID
+        """
+
+        TestFruit.objects.create(name="Apple", color="Red")
+        key = datastore.Key.from_path(TestFruit._meta.db_table, "Apple")
+        self.assertTrue(datastore.Get([key])[0])
 
 
 def deferred_func():
