@@ -122,7 +122,7 @@ DATABASES = {
     },
     "ns1": {
         'ENGINE': 'djangae.db.backends.appengine',
-        'NAMESPACE': 'ns1',
+        'NAMESPACE': 'ns1namespace',
     }
 }
 

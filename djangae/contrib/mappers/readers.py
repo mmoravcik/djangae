@@ -15,10 +15,10 @@ class DjangoInputReader(input_readers.InputReader):
         self.start_id = start_id
         self.end_id = end_id
         self.raw_model = model
+        self.db = kwargs.pop('db', 'default')
         app, model = self.raw_model.split('.')
         self.model = apps.get_model(app, model)
         super(DjangoInputReader, self).__init__(*args, **kwargs)
-
 
     def __iter__(self):
         if self.start_id > self.end_id:
@@ -26,7 +26,7 @@ class DjangoInputReader(input_readers.InputReader):
             # the shard size caused each previous shard to process an additional model
             return
 
-        query = self.model.objects
+        query = self.model.objects.using(self.db)
 
         if self.start_id:
             query = query.filter(pk__gt=self.start_id).filter(pk__lte=self.end_id)
@@ -39,7 +39,6 @@ class DjangoInputReader(input_readers.InputReader):
             self.start_id = model.id
             yield model
 
-
     @classmethod
     def validate(cls, mapper_spec):
         if mapper_spec.input_reader_class() != cls:
@@ -49,7 +48,6 @@ class DjangoInputReader(input_readers.InputReader):
             if not param in params:
                 raise input_readers.BadReaderParamsError("Parameter missing: %s" % param)
 
-
     @classmethod
     def split_input(cls, mapper_spec):
         shard_count = mapper_spec.shard_count
@@ -57,12 +55,14 @@ class DjangoInputReader(input_readers.InputReader):
         # Grab the input parameters for the split
         params = input_readers._get_params(mapper_spec)
         logging.info("Params: %s" % params)
+
+        db = params['kwargs']['db']
         # Unpickle the query
         app, model = params['model'].split('.')
         model = apps.get_model(app, model)
 
         # Grab the lowest pk
-        query = model.objects.all()
+        query = model.objects.using(db).all()
         query = query.order_by('pk')
 
         try:
@@ -71,14 +71,14 @@ class DjangoInputReader(input_readers.InputReader):
             query = query.order_by('-pk')
             last_id = query.values_list('pk', flat=True)[:1][0]
         except IndexError:
-            return [DjangoInputReader(0,0, params['model'])]
+            return [DjangoInputReader(0, 0, params['model'], db=db)]
 
         pk_range = last_id - first_id
 
         logging.info("Query range: %s - %s = %s" % (first_id, last_id, pk_range))
 
         if pk_range < shard_count or shard_count == 1:
-            return [DjangoInputReader(first_id-1, last_id, params['model'])]
+            return [DjangoInputReader(first_id-1, last_id, params['model'], db=db)]
 
         readers = []
         max_shard_size = int(float(pk_range) / float(shard_count))
@@ -99,12 +99,11 @@ class DjangoInputReader(input_readers.InputReader):
                 shard_end_id = last_id
 
             logging.info("Creating shard: %s - %s" % (shard_start_id, shard_end_id))
-            reader = DjangoInputReader(shard_start_id, shard_end_id, params['model'])
+            reader = DjangoInputReader(shard_start_id, shard_end_id, params['model'], db=db)
             reader.shard_id = shard_id
             readers.append(reader)
             shard_id += 1
         return readers
-
 
     @classmethod
     def from_json(cls, input_shard_state):
@@ -112,18 +111,19 @@ class DjangoInputReader(input_readers.InputReader):
         end_id = input_shard_state['end']
         shard_id = input_shard_state['shard_id']
         model = input_shard_state['model']
+        db = input_shard_state['db']
 
-        reader = DjangoInputReader(start_id, end_id, model)
+        reader = DjangoInputReader(start_id, end_id, model, db=db)
         reader.shard_id = shard_id
         return reader
-
 
     def to_json(self):
         return {
             'start': self.start_id,
             'end': self.end_id,
             'shard_id': self.shard_id,
-            'model': self.raw_model
+            'model': self.raw_model,
+            'db': self.db,
         }
 
 

@@ -1,8 +1,9 @@
 import datetime
 import logging
 
+from django.conf import settings
 from django.apps import apps
-from django.db import models, connection
+from django.db import models, connections
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 
@@ -55,6 +56,7 @@ class ActionLog(models.Model):
 class UniqueAction(models.Model):
     action_type = models.CharField(choices=ACTION_TYPES, max_length=100)
     model = models.CharField(max_length=100)
+    db = models.CharField(max_length=100, default='default')
     status = models.CharField(choices=ACTION_STATUSES, default=ACTION_STATUSES[0][0], editable=False, max_length=100)
     logs = RelatedSetField(ActionLog, editable=False)
 
@@ -99,10 +101,10 @@ def start_action(sender, instance, created, raw, **kwargs):
 
     if instance.action_type == "clean":
         kwargs.update(model=instance.model)
-        CleanMapper().start(**kwargs)
+        CleanMapper(db=instance.db).start(**kwargs)
     else:
         kwargs.update(repair=instance.action_type=="repair")
-        CheckRepairMapper(model=decode_model(instance.model)).start(**kwargs)
+        CheckRepairMapper(model=decode_model(instance.model), db=instance.db).start(**kwargs)
 
 
 def _finish(*args, **kwargs):
@@ -131,8 +133,10 @@ class CheckRepairMapper(MapReduceTask):
         action_id = kwargs.get("action_pk")
         repair = kwargs.get("repair")
 
-        namespace = connection.settings_dict.get("NAMESPACE", "")
-        entity = django_instance_to_entity(connection, type(instance), instance._meta.fields, raw=True, instance=instance, check_null=False)
+        alias = kwargs.get("db", "default")
+        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE", "")
+        assert alias == (instance._state.db or "default")
+        entity = django_instance_to_entity(connections[alias], type(instance), instance._meta.fields, raw=True, instance=instance, check_null=False)
         identifiers = unique_identifiers_from_entity(type(instance), entity, ignore_pk=True)
         identifier_keys = [datastore.Key.from_path(UniqueMarker.kind(), i, namespace=namespace) for i in identifiers]
 
@@ -185,11 +189,13 @@ class RawMapperMixin(object):
         return None
 
     def start(self, *args, **kwargs):
+        kwargs['db'] = self.db
         mapper_parameters = {
             'entity_kind': self.kind,
             'keys_only': False,
             'kwargs': kwargs,
             'args': args,
+            'namespace': settings.DATABASES.get(self.db, {}).get('NAMESPACE', ''),
         }
         mapper_parameters['_map'] = self.get_relative_path(self.map)
         pipe = DjangaeMapperPipeline(
@@ -214,25 +220,28 @@ class CleanMapper(RawMapperMixin, MapReduceTask):
     def map(entity, model, *args, **kwargs):
         """ The Clean mapper maps over all UniqueMarker instances. """
 
-        model = decode_model(model)
+        alias = kwargs.get("db", "default")
+        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE", "")
 
+        model = decode_model(model)
         if not entity.key().id_or_name().startswith(model._meta.db_table + "|"):
             # Only include markers which are for this model
             return
 
+        assert namespace == entity.namespace()
         with disable_cache():
             # At this point, the entity is a unique marker that is linked to an instance of 'model', now we should see if that instance exists!
             instance_id = entity["instance"].id_or_name()
             try:
-                instance = model.objects.get(pk=instance_id)
+                instance = model.objects.using(alias).get(pk=instance_id)
             except model.DoesNotExist:
                 logging.info("Deleting unique marker {} because the associated instance no longer exists".format(entity.key().id_or_name()))
                 datastore.Delete(entity)
                 return
 
             # Get the possible unique markers for the entity, if this one doesn't exist in that list then delete it
-            instance = django_instance_to_entity(connection, model, instance._meta.fields, raw=True, instance=instance, check_null=False)
-            identifiers = unique_identifiers_from_entity(model, instance, ignore_pk=True)
+            instance_entity = django_instance_to_entity(connections[alias], model, instance._meta.fields, raw=True, instance=instance, check_null=False)
+            identifiers = unique_identifiers_from_entity(model, instance_entity, ignore_pk=True)
             identifier_keys = [datastore.Key.from_path(UniqueMarker.kind(), i, namespace=entity["instance"].namespace()) for i in identifiers]
             if entity.key() not in identifier_keys:
                 logging.info("Deleting unique marker {} because the it no longer represents the associated instance state".format(entity.key().id_or_name()))

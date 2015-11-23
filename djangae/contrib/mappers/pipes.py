@@ -1,3 +1,4 @@
+from django.conf import settings
 from mapreduce.mapper_pipeline import MapperPipeline
 from mapreduce import parameters
 from mapreduce import control
@@ -7,6 +8,7 @@ from pipeline.util import for_name
 
 BASE_PATH = '/_ah/mapreduce'
 PIPELINE_BASE_PATH = BASE_PATH + '/pipeline'
+
 
 class DjangaeMapperPipeline(MapperPipeline):
 
@@ -81,7 +83,8 @@ class MapReduceTask(object):
     target = 'default'
 
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, db='default'):
+        self.db = db
         if model:
             self.model = model
         if not self.job_name:
@@ -125,10 +128,12 @@ class MapReduceTask(object):
         raise NotImplementedError('You must supply a finish function')
 
     def start(self, *args, **kwargs):
+        kwargs['db'] = self.db
         mapper_parameters = {
             'model': self.get_model_app_(),
             'kwargs': kwargs,
             'args': args,
+            'namespace': settings.DATABASES.get(self.db, {}).get('NAMESPACE', ''),
         }
         if 'map' not in self.__class__.__dict__:
             raise Exception('No static map method defined on class {cls}'.format(self.__class__))
@@ -136,9 +141,8 @@ class MapReduceTask(object):
         if 'finish' in self.__class__.__dict__:
             mapper_parameters['_finish'] = self.get_relative_path(self.finish)
 
-
         # Calculate a sensible shard count if one isn't specified
-        shard_count = self.shard_count or (self.model.objects.all()[:1000].count() / 100) + 1
+        shard_count = self.shard_count or (self.model.objects.using(self.db).all()[:1000].count() / 100) + 1
 
         pipe = DjangaeMapperPipeline(
             self.job_name,
