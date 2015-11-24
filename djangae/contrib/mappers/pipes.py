@@ -18,7 +18,7 @@ class DjangaeMapperPipeline(MapperPipeline):
             this is the cleanest way that still gives us a working Pipeline that we can chain
         """
         if shards is None:
-          shards = parameters.config.SHARD_COUNT
+            shards = parameters.config.SHARD_COUNT
 
         mapreduce_id = control.start_map(
             job_name,
