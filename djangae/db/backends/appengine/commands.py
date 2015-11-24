@@ -799,7 +799,7 @@ class InsertCommand(object):
         self.entities = []
         self.included_keys = []
 
-        namespace = connection.ops.connection.settings_dict.get("NAMESPACE", "")
+        namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
 
         for obj in self.objs:
             if self.has_pk:

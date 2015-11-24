@@ -10,7 +10,7 @@ from djangae.test import TestCase, process_task_queues
 from djangae.db.constraints import UniqueMarker, UniquenessMixin
 
 
-DEFAULT_NAMESPACE = settings.DATABASES.get("default", {}).get("NAMESPACE", "")
+DEFAULT_NAMESPACE = settings.DATABASES.get("default", {}).get("NAMESPACE")
 
 
 class TestModel(UniquenessMixin, models.Model):

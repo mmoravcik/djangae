@@ -215,7 +215,7 @@ def django_instance_to_entity(connection, model, fields, raw, instance, check_nu
         else:
             raise ValueError("Invalid primary key value")
 
-    namespace = connection.settings_dict.get("NAMESPACE", "")
+    namespace = connection.settings_dict.get("NAMESPACE")
     entity = datastore.Entity(db_table, namespace=namespace, **kwargs)
     entity.update(field_values)
 

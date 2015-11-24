@@ -87,7 +87,7 @@ class Cursor(object):
         self.last_delete_command = None
 
     def execute(self, sql, *params):
-        namespace = self.connection.ops.connection.settings_dict.get("NAMESPACE", "")
+        namespace = self.connection.ops.connection.settings_dict.get("NAMESPACE")
 
         with active_namespace(namespace):
             if isinstance(sql, SelectCommand):
@@ -281,7 +281,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return value
 
     def sql_flush(self, style, tables, seqs, allow_cascade=False):
-        with active_namespace(self.connection.settings_dict.get("NAMESPACE", "")):
+        with active_namespace(self.connection.settings_dict.get("NAMESPACE")):
             return [ FlushCommand(table) for table in tables ]
 
     def prep_lookup_key(self, model, value, field):
@@ -527,7 +527,7 @@ class DatabaseCreation(BaseDatabaseCreation):
 class DatabaseIntrospection(BaseDatabaseIntrospection):
     @datastore.NonTransactional
     def get_table_list(self, cursor):
-        with active_namespace(self.connection.settings_dict.get("NAMESPACE", "")):
+        with active_namespace(self.connection.settings_dict.get("NAMESPACE")):
             kinds = metadata.get_kinds()
             try:
                 from django.db.backends.base.introspection import TableInfo

@@ -18,7 +18,7 @@ from djangae.db.caching import disable_cache, clear_context_cache
 from djangae.db.backends.appengine.compiler import active_namespace
 
 
-DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE", "")
+DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE")
 
 
 class FakeEntity(dict):

@@ -43,7 +43,7 @@ from djangae.core import paginator
 from djangae.db.backends.appengine.compiler import active_namespace
 
 
-DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE", "")
+DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE")
 
 
 try:

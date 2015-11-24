@@ -134,7 +134,7 @@ class CheckRepairMapper(MapReduceTask):
         repair = kwargs.get("repair")
 
         alias = kwargs.get("db", "default")
-        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE", "")
+        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE")
         assert alias == (instance._state.db or "default")
         entity = django_instance_to_entity(connections[alias], type(instance), instance._meta.fields, raw=True, instance=instance, check_null=False)
         identifiers = unique_identifiers_from_entity(type(instance), entity, ignore_pk=True)
@@ -195,7 +195,7 @@ class RawMapperMixin(object):
             'keys_only': False,
             'kwargs': kwargs,
             'args': args,
-            'namespace': settings.DATABASES.get(self.db, {}).get('NAMESPACE', ''),
+            'namespace': settings.DATABASES.get(self.db, {}).get('NAMESPACE'),
         }
         mapper_parameters['_map'] = self.get_relative_path(self.map)
         pipe = DjangaeMapperPipeline(
@@ -221,7 +221,7 @@ class CleanMapper(RawMapperMixin, MapReduceTask):
         """ The Clean mapper maps over all UniqueMarker instances. """
 
         alias = kwargs.get("db", "default")
-        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE", "")
+        namespace = settings.DATABASES.get(alias, {}).get("NAMESPACE")
 
         model = decode_model(model)
         if not entity.key().id_or_name().startswith(model._meta.db_table + "|"):

@@ -133,7 +133,7 @@ class MapReduceTask(object):
             'model': self.get_model_app_(),
             'kwargs': kwargs,
             'args': args,
-            'namespace': settings.DATABASES.get(self.db, {}).get('NAMESPACE', ''),
+            'namespace': settings.DATABASES.get(self.db, {}).get("NAMESPACE"),
         }
         if 'map' not in self.__class__.__dict__:
             raise Exception('No static map method defined on class {cls}'.format(self.__class__))
