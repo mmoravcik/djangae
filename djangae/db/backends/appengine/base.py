@@ -33,7 +33,6 @@ except ImportError:
 
 from django.utils import timezone
 from google.appengine.api.datastore_types import Blob, Text
-from google.appengine.ext.db import metadata
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.api import datastore, datastore_errors
 
@@ -526,13 +525,13 @@ class DatabaseCreation(BaseDatabaseCreation):
 class DatabaseIntrospection(BaseDatabaseIntrospection):
     @datastore.NonTransactional
     def get_table_list(self, cursor):
-        with active_namespace(self.connection.settings_dict.get("NAMESPACE")):
-            kinds = metadata.get_kinds()
-            try:
-                from django.db.backends.base.introspection import TableInfo
-                return [ TableInfo(x, "t") for x in kinds ]
-            except ImportError:
-                return kinds # Django <= 1.7
+        namespace = self.connection.settings_dict.get("NAMESPACE")
+        kinds = [kind.key().id_or_name() for kind in datastore.Query('__kind__', namespace=namespace).Run()]
+        try:
+            from django.db.backends.base.introspection import TableInfo
+            return [TableInfo(x, "t") for x in kinds]
+        except ImportError:
+            return kinds # Django <= 1.7
 
 
 class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
