@@ -1620,7 +1620,7 @@ class NamespaceTests(TestCase):
             retrievable with just a kind and ID
         """
 
-        TestFruit.objects.create(name="Apple", color="Red")
+        TestFruit.objects.using("nonamespace").create(name="Apple", color="Red")
         key = datastore.Key.from_path(TestFruit._meta.db_table, "Apple")
         self.assertTrue(datastore.Get([key])[0])
 

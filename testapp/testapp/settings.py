@@ -119,11 +119,15 @@ WSGI_APPLICATION = 'testapp.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'djangae.db.backends.appengine',
+        'NAMESPACE': 'customdefaultnamespace',
     },
     "ns1": {
         'ENGINE': 'djangae.db.backends.appengine',
         'NAMESPACE': 'ns1namespace',
-    }
+    },
+    "nonamespace": {
+        'ENGINE': 'djangae.db.backends.appengine',
+    },
 }
 
 # Internationalization
