@@ -799,8 +799,8 @@ class FlushCommand(object):
         while query.Count():
             datastore.Delete(query.Run())
 
-        # TODO: ideally we would only clear the objects for the table that was flushed, but we have
-        # no way of doing that
+        # TODO: ideally we would only clear the cached objects for the table that was flushed, but
+        # we have no way of doing that
         cache.clear()
         clear_context_cache()
 

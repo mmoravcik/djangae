@@ -23,7 +23,7 @@ def _format_value_for_identifier(value):
 
 def unique_identifiers_from_entity(model, entity, ignore_pk=False, ignore_null_values=True):
     """
-        Given an instance, this function returns a list of identifiers that represent
+        Given an instance, this function returns a list of identifier strings that represent
         unique field/value combinations.
     """
     from djangae.db.utils import get_top_concrete_parent
