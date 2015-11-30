@@ -1593,6 +1593,7 @@ class TestSpecialIndexers(TestCase):
 
 
 class NamespaceTests(TestCase):
+
     @skipIf("ns1" not in settings.DATABASES, "This test is designed for the Djangae testapp settings")
     def test_database_specific_namespaces(self):
         TestFruit.objects.create(name="Apple", color="Red")
@@ -1623,6 +1624,40 @@ class NamespaceTests(TestCase):
         TestFruit.objects.using("nonamespace").create(name="Apple", color="Red")
         key = datastore.Key.from_path(TestFruit._meta.db_table, "Apple")
         self.assertTrue(datastore.Get([key])[0])
+
+    @skipIf("nonamespace" not in settings.DATABASES, "This test is designed for the Djangae testapp settings")
+    def test_move_objects_between_namespaces(self):
+        objs = [
+            TestFruit.objects.create(name="Banana", color="Black"),
+            TestFruit.objects.create(name="Tomato", color="Red"),
+        ]
+        # First, check that these objects do not exist in the other namespace.
+        # We check this in several ways to check that the namespace functionality works in the
+        # various different commands of the DB backend
+        other_qs = TestFruit.objects.using("nonamespace")
+        self.assertEqual(len(other_qs.all()), 0)
+        self.assertEqual(other_qs.count(), 0)
+        for obj in objs:
+            self.assertRaises(TestFruit.DoesNotExist, other_qs.get, name=obj.name)
+        # Now re-save both of the objects into the other namespace
+        for obj in objs:
+            obj.save(using="nonamespace")
+        # And now check that they DO exist in that namespace
+        self.assertEqual(len(other_qs.all()), 2)
+        self.assertEqual(other_qs.count(), 2)
+        for obj in objs:
+            self.assertEqual(other_qs.get(name=obj.name), obj)
+        # Now delete the objects from the original (default) namespace
+        TestFruit.objects.all().delete()
+        # And now make sure that they exist ONLY in the other namespace
+        self.assertEqual(len(TestFruit.objects.all()), 0)
+        self.assertEqual(len(other_qs.all()), 2)
+        self.assertEqual(TestFruit.objects.count(), 0)
+        self.assertEqual(other_qs.count(), 2)
+        for obj in objs:
+            self.assertRaises(TestFruit.DoesNotExist, TestFruit.objects.get, name=obj.name)
+            self.assertEqual(other_qs.get(name=obj.name), obj)
+
 
 
 def deferred_func():
