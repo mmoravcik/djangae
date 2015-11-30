@@ -119,9 +119,14 @@ class ContextStack(object):
         if apply_staged:
             while self.staged:
                 to_apply = self.staged.pop()
-                caching.remove_entities_from_cache_by_key(
-                    to_apply.reverse_cache.keys(), memcache_only=True
-                )
+                keys = to_apply.reverse_cache.keys()
+                if keys:
+                    # This assumes that all keys are in the same namespace, which is almost definitely
+                    # going to be the case, but it feels a bit dirty
+                    namespace = keys[0].namespace() or None
+                    caching.remove_entities_from_cache_by_key(
+                        keys, namespace=namespace, memcache_only=True
+                    )
 
                 self.top.apply(to_apply)
 

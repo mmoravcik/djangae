@@ -1,10 +1,16 @@
+# LIBRARIES
+from django.db import models, connections, connection as default_connection
 from django.db.models.sql.datastructures import EmptyResultSet
-from django.db import models, connections
-from djangae.test import TestCase
-from djangae.db.backends.appengine.query import transform_query, Query, WhereNode
 from django.db.models.query import Q
-
 from google.appengine.api import datastore
+
+# DJANGAE
+from djangae.db.backends.appengine.query import transform_query, Query, WhereNode
+from djangae.test import TestCase
+
+
+DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
+
 
 class TransformTestModel(models.Model):
     field1 = models.CharField(max_length=255)
@@ -438,9 +444,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual("__key__", query.where.children[1].column)
         self.assertEqual("__key__", query.where.children[2].column)
         self.assertEqual({
-                datastore.Key.from_path(TestUser._meta.db_table, 1),
-                datastore.Key.from_path(TestUser._meta.db_table, 2),
-                datastore.Key.from_path(TestUser._meta.db_table, 3),
+                datastore.Key.from_path(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
+                datastore.Key.from_path(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
+                datastore.Key.from_path(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
             }, {
                 query.where.children[0].value,
                 query.where.children[1].value,
@@ -465,9 +471,9 @@ class QueryNormalizationTests(TestCase):
         self.assertEqual("test", query.where.children[0].children[1].value)
 
         self.assertEqual({
-                datastore.Key.from_path(TestUser._meta.db_table, 1),
-                datastore.Key.from_path(TestUser._meta.db_table, 2),
-                datastore.Key.from_path(TestUser._meta.db_table, 3),
+                datastore.Key.from_path(TestUser._meta.db_table, 1, namespace=DEFAULT_NAMESPACE),
+                datastore.Key.from_path(TestUser._meta.db_table, 2, namespace=DEFAULT_NAMESPACE),
+                datastore.Key.from_path(TestUser._meta.db_table, 3, namespace=DEFAULT_NAMESPACE),
             }, {
                 query.where.children[0].children[0].value,
                 query.where.children[1].children[0].value,

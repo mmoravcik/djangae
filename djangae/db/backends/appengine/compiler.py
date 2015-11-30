@@ -1,6 +1,5 @@
 #LIBRARIES
 import django
-import contextlib
 
 from django.db.models.sql import compiler
 
@@ -11,17 +10,6 @@ from .commands import (
     UpdateCommand,
     DeleteCommand
 )
-
-@contextlib.contextmanager
-def active_namespace(namespace):
-    from google.appengine.api import namespace_manager
-
-    try:
-        original_namespace = namespace_manager.get_namespace()
-        namespace_manager.set_namespace(namespace)
-        yield
-    finally:
-        namespace_manager.set_namespace(original_namespace)
 
 
 class SQLCompiler(compiler.SQLCompiler):

@@ -41,7 +41,6 @@ from djangae.fields import SetField, ListField, RelatedSetField
 from djangae.storage import BlobstoreFileUploadHandler
 from djangae.core import paginator
 
-from djangae.db.backends.appengine.compiler import active_namespace
 
 DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
 
@@ -665,34 +664,45 @@ class ConstraintTests(TestCase):
     """
 
     def test_update_updates_markers(self):
-        with active_namespace(DEFAULT_NAMESPACE):
-            initial_count = datastore.Query(UniqueMarker.kind()).Count()
+        initial_count = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
 
-            instance = ModelWithUniques.objects.create(name="One")
+        instance = ModelWithUniques.objects.create(name="One")
 
 
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
 
-            qry = datastore.Query(UniqueMarker.kind())
-            qry.Order(("created", datastore.Query.DESCENDING))
+        qry = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE)
+        qry.Order(("created", datastore.Query.DESCENDING))
 
-            marker = [x for x in qry.Run()][0]
-            # Make sure we assigned the instance
-            self.assertEqual(marker["instance"], datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE))
+        marker = [x for x in qry.Run()][0]
+        # Make sure we assigned the instance
+        self.assertEqual(
+            marker["instance"],
+            datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+        )
 
-            expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
-            self.assertEqual(expected_marker, marker.key().id_or_name())
+        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
+        self.assertEqual(expected_marker, marker.key().id_or_name())
 
-            instance.name = "Two"
-            instance.save()
+        instance.name = "Two"
+        instance.save()
 
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
-            marker = [x for x in qry.Run()][0]
-            # Make sure we assigned the instance
-            self.assertEqual(marker["instance"], datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE))
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
+        marker = [x for x in qry.Run()][0]
+        # Make sure we assigned the instance
+        self.assertEqual(
+            marker["instance"],
+            datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+        )
 
-            expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two").hexdigest())
-            self.assertEqual(expected_marker, marker.key().id_or_name())
+        expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("Two").hexdigest())
+        self.assertEqual(expected_marker, marker.key().id_or_name())
 
     def test_conflicting_insert_throws_integrity_error(self):
         ModelWithUniques.objects.create(name="One")
@@ -756,27 +766,32 @@ class ConstraintTests(TestCase):
         ], ids_one)
 
     def test_error_on_update_doesnt_change_markers(self):
-        with active_namespace(DEFAULT_NAMESPACE):
-            initial_count = datastore.Query(UniqueMarker.kind()).Count()
+        initial_count = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
 
         instance = ModelWithUniques.objects.create(name="One")
 
-        with active_namespace(DEFAULT_NAMESPACE):
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
 
-            qry = datastore.Query(UniqueMarker.kind())
-            qry.Order(("created", datastore.Query.DESCENDING))
+        qry = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE)
+        qry.Order(("created", datastore.Query.DESCENDING))
 
-            marker = [ x for x in qry.Run()][0]
+        marker = [x for x in qry.Run()][0]
 
         # Make sure we assigned the instance
-        self.assertEqual(marker["instance"], datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE))
+        self.assertEqual(
+            marker["instance"],
+            datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+        )
 
         expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
         self.assertEqual(expected_marker, marker.key().id_or_name())
 
         instance.name = "Two"
 
+        # TODO: replace this insanity with sleuth.switch
         from djangae.db.backends.appengine.commands import datastore as to_patch
 
         try:
@@ -797,11 +812,16 @@ class ConstraintTests(TestCase):
         finally:
             to_patch.Put = original
 
-        with active_namespace(DEFAULT_NAMESPACE):
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
-            marker = [x for x in qry.Run()][0]
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
+        marker = [x for x in qry.Run()][0]
         # Make sure we assigned the instance
-        self.assertEqual(marker["instance"], datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE))
+        self.assertEqual(
+            marker["instance"],
+            datastore.Key.from_path(instance._meta.db_table, instance.pk, namespace=DEFAULT_NAMESPACE)
+        )
 
         expected_marker = "{}|name:{}".format(ModelWithUniques._meta.db_table, md5("One").hexdigest())
         self.assertEqual(expected_marker, marker.key().id_or_name())
@@ -809,6 +829,7 @@ class ConstraintTests(TestCase):
     def test_error_on_insert_doesnt_create_markers(self):
         initial_count = datastore.Query(UniqueMarker.kind()).Count()
 
+        # TODO: replace this insanity with sleuth.switch
         from djangae.db.backends.appengine.commands import datastore as to_patch
         try:
             original = to_patch.Put
@@ -828,24 +849,35 @@ class ConstraintTests(TestCase):
         finally:
             to_patch.Put = original
 
-        self.assertEqual(0, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+        self.assertEqual(
+            0,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
 
     def test_delete_clears_markers(self):
-        with active_namespace(DEFAULT_NAMESPACE):
-            initial_count = datastore.Query(UniqueMarker.kind()).Count()
+        initial_count = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
 
-            instance = ModelWithUniques.objects.create(name="One")
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
-            instance.delete()
-            self.assertEqual(0, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+        instance = ModelWithUniques.objects.create(name="One")
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
+        instance.delete()
+        self.assertEqual(
+            0,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
 
     @override_settings(DJANGAE_DISABLE_CONSTRAINT_CHECKS=True)
     def test_constraints_disabled_doesnt_create_or_check_markers(self):
-        initial_count = datastore.Query(UniqueMarker.kind()).Count()
+        initial_count = datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
 
         instance1 = ModelWithUniques.objects.create(name="One")
 
-        self.assertEqual(initial_count, datastore.Query(UniqueMarker.kind()).Count())
+        self.assertEqual(
+            initial_count,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count()
+        )
 
         instance2 = ModelWithUniques.objects.create(name="One")
 
@@ -858,8 +890,10 @@ class ConstraintTests(TestCase):
         initial_count = datastore.Query(UniqueMarker.kind()).Count()
         ModelWithUniquesAndOverride.objects.create(name="One")
 
-        with active_namespace(DEFAULT_NAMESPACE):
-            self.assertEqual(1, datastore.Query(UniqueMarker.kind()).Count() - initial_count)
+        self.assertEqual(
+            1,
+            datastore.Query(UniqueMarker.kind(), namespace=DEFAULT_NAMESPACE).Count() - initial_count
+        )
 
     def test_list_field_unique_constaints(self):
         instance1 = UniqueModel.objects.create(unique_field=1, unique_combo_one=1, unique_list_field=["A", "C"])

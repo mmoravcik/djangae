@@ -260,7 +260,7 @@ class MockInstance(object):
 
 
 def key_exists(key):
-    qry = Query(keys_only=True)
+    qry = Query(keys_only=True, namespace=key.namespace())
     qry.Ancestor(key)
     return qry.Count(limit=1) > 0
 

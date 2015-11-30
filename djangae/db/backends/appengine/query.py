@@ -100,7 +100,7 @@ class WhereNode(object):
     def append_child(self, node):
         self.children.append(node)
 
-    def set_leaf(self, column, operator, value, is_pk_field, negated, target_field=None):
+    def set_leaf(self, column, operator, value, is_pk_field, negated, namespace, target_field=None):
         assert column
         assert operator
         assert isinstance(is_pk_field, bool)
@@ -122,7 +122,7 @@ class WhereNode(object):
 
             if isinstance(value, (list, tuple)):
                 value = [
-                    datastore.Key.from_path(table, x)
+                    datastore.Key.from_path(table, x, namespace=namespace)
                     for x in value if x
                 ]
             else:
@@ -141,7 +141,7 @@ class WhereNode(object):
                     value = datastore.Key.from_path('', 1)
                     operator = '<'
                 else:
-                    value = datastore.Key.from_path(table, value)
+                    value = datastore.Key.from_path(table, value, namespace=namespace)
             column = "__key__"
 
         # Do any special index conversions necessary to perform this lookup
@@ -954,6 +954,7 @@ def _django_17_query_walk_leaf(node, negated, new_parent, connection, model):
         rhs,
         is_pk_field=field==model._meta.pk,
         negated=negated,
+        namespace=connection.ops.connection.settings_dict.get("NAMESPACE"),
         target_field=node.lhs.target,
     )
 

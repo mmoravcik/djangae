@@ -55,7 +55,7 @@ from .commands import (
 )
 
 from djangae.db.backends.appengine import dbapi as Database
-from .compiler import active_namespace
+
 
 class Connection(object):
     """ Dummy connection class """
@@ -86,24 +86,21 @@ class Cursor(object):
         self.last_delete_command = None
 
     def execute(self, sql, *params):
-        namespace = self.connection.ops.connection.settings_dict.get("NAMESPACE")
-
-        with active_namespace(namespace):
-            if isinstance(sql, SelectCommand):
-                # Also catches subclasses of SelectCommand (e.g Update)
-                self.last_select_command = sql
-                self.rowcount = self.last_select_command.execute() or -1
-            elif isinstance(sql, FlushCommand):
-                sql.execute()
-            elif isinstance(sql, UpdateCommand):
-                self.rowcount = sql.execute()
-            elif isinstance(sql, DeleteCommand):
-                self.rowcount = sql.execute()
-            elif isinstance(sql, InsertCommand):
-                self.connection.queries.append(sql)
-                self.returned_ids = sql.execute()
-            else:
-                raise Database.CouldBeSupportedError("Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)", sql)
+        if isinstance(sql, SelectCommand):
+            # Also catches subclasses of SelectCommand (e.g Update)
+            self.last_select_command = sql
+            self.rowcount = self.last_select_command.execute() or -1
+        elif isinstance(sql, FlushCommand):
+            sql.execute()
+        elif isinstance(sql, UpdateCommand):
+            self.rowcount = sql.execute()
+        elif isinstance(sql, DeleteCommand):
+            self.rowcount = sql.execute()
+        elif isinstance(sql, InsertCommand):
+            self.connection.queries.append(sql)
+            self.returned_ids = sql.execute()
+        else:
+            raise Database.CouldBeSupportedError("Can't execute traditional SQL: '%s' (although perhaps we could make GQL work)", sql)
 
     def next(self):
         row = self.fetchone()
