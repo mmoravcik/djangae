@@ -13,7 +13,7 @@ from django.conf import settings
 from django.core.files.uploadhandler import StopFutureHandlers
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db import DataError, models
+from django.db import connection as default_connection, DataError, models
 from django.db.models.query import Q
 from django.forms import ModelForm
 from django.test import RequestFactory
@@ -31,6 +31,7 @@ from django.template import Template, Context
 from djangae.contrib import sleuth
 from djangae.test import inconsistent_db, TestCase
 from django.db import IntegrityError, NotSupportedError
+from djangae.db.backends.appengine.commands import FlushCommand
 from djangae.db.constraints import UniqueMarker, UniquenessMixin
 from djangae.db.unique_utils import _unique_combinations, unique_identifiers_from_entity
 from djangae.db.backends.appengine.indexing import add_special_index
@@ -42,8 +43,7 @@ from djangae.core import paginator
 
 from djangae.db.backends.appengine.compiler import active_namespace
 
-
-DEFAULT_NAMESPACE = settings.DATABASES["default"].get("NAMESPACE")
+DEFAULT_NAMESPACE = default_connection.ops.connection.settings_dict.get("NAMESPACE")
 
 
 try:
@@ -704,10 +704,7 @@ class ConstraintTests(TestCase):
         ModelWithUniques.objects.create(name="One")
         UniqueModel.objects.create(unique_field="One")
 
-        from djangae.db.backends.appengine.commands import FlushCommand
-
-        with active_namespace(DEFAULT_NAMESPACE):
-            FlushCommand(ModelWithUniques._meta.db_table).execute()
+        FlushCommand(ModelWithUniques._meta.db_table, default_connection).execute()
 
         ModelWithUniques.objects.create(name="One")
 

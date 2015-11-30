@@ -758,27 +758,31 @@ class FlushCommand(object):
         We instead return a list of FlushCommands which are called by
         our cursor.execute
     """
-    def __init__(self, table):
+    def __init__(self, table, connection):
         self.table = table
+        self.namespace = connection.ops.connection.settings_dict.get("NAMESPACE")
 
     def execute(self):
         table = self.table
-        query = datastore.Query(table, keys_only=True)
+        query = datastore.Query(table, keys_only=True, namespace=self.namespace)
         while query.Count():
             datastore.Delete(query.Run())
-
-        namespace = namespace_manager.get_namespace()
 
         # Delete the markers we need to
         from djangae.db.constraints import UniqueMarker
-        query = datastore.Query(UniqueMarker.kind(), keys_only=True)
-        query["__key__ >="] = datastore.Key.from_path(UniqueMarker.kind(), self.table, namespace=namespace)
-        query["__key__ <"] = datastore.Key.from_path(UniqueMarker.kind(), u"{}{}".format(self.table, u'\ufffd'), namespace=namespace)
+        query = datastore.Query(UniqueMarker.kind(), keys_only=True, namespace=self.namespace)
+        query["__key__ >="] = datastore.Key.from_path(UniqueMarker.kind(), self.table, namespace=self.namespace)
+        query["__key__ <"] = datastore.Key.from_path(
+            UniqueMarker.kind(), u"{}{}".format(self.table, u'\ufffd'), namespace=self.namespace
+        )
         while query.Count():
             datastore.Delete(query.Run())
 
+        # TODO: ideally we would only clear the objects for the table that was flushed, but we have
+        # no way of doing that
         cache.clear()
         clear_context_cache()
+
 
 @db.non_transactional
 def reserve_id(kind, id_or_name, namespace):

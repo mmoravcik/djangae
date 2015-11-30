@@ -281,8 +281,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return value
 
     def sql_flush(self, style, tables, seqs, allow_cascade=False):
-        with active_namespace(self.connection.settings_dict.get("NAMESPACE")):
-            return [ FlushCommand(table) for table in tables ]
+        return [ FlushCommand(table, self.connection) for table in tables ]
 
     def prep_lookup_key(self, model, value, field):
         if isinstance(value, basestring):
